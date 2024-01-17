@@ -76,35 +76,7 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void print_vertices(float* vertices);
 void print_fish();
 
-void assign_grid(float cell_size, int *cell_idx, int *indices)
-{
-    int grid_size = (int)(2.0f / cell_size) + 1;
-    for (int i = 0; i < N; i++)
-    {
-        float x = fishes[i].x + 1.0f;
-        float y = fishes[i].y + 1.0f;
-        int r = (int)(y / cell_size);
-        int c = (int)(x / cell_size);
-        cell_idx[i] = r * grid_size + c;
-    }
-}
 
-void find_border_cells(int *grid_first, int *grid_last, int *cell_idx)
-{
-    grid_first[cell_idx[0]] = 0;
-    for (int i = 1; i < N; i++)
-    {
-        int cur_cell = cell_idx[i];
-        int prev_cell = cell_idx[i - 1];
-        if (cur_cell != prev_cell)
-        {
-            grid_last[prev_cell] = i;
-            grid_first[cur_cell] = i;
-        }
-        if (i == N - 1)
-            grid_last[cur_cell] = N;
-    }
-}
 
 void gather(int *indices)
 {

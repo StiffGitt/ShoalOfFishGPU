@@ -18,16 +18,31 @@ int N;
 // global
 void assign_grid(Fish *fishes, float cell_size, int* cell_idx, int* indices)
 {
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
     int grid_size = (int)(2.0f / cell_size) + 1;
-    for (int i = 0; i < N; i++)
+    float x = fishes[idx].x + 1.0f;
+    float y = fishes[idx].y + 1.0f;
+    int r = (int)(y / cell_size);
+    int c = (int)(x / cell_size);
+    dev_cell_idx[idx] = r * grid_size + c;
+    indices[idx] = idx;
+}
+
+// global
+void find_border_cells(int* grid_first, int* grid_last, int* cell_idx)
+{
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    if(idx == 0)
+        grid_first[cell_idx[0]] = 0;
+    int cur_cell = cell_idx[idx];
+    int prev_cell = cell_idx[idx - 1];
+    if (cur_cell != prev_cell)
     {
-        float x = fishes[i].x + 1.0f;
-        float y = fishes[i].y + 1.0f;
-        int r = (int)(y / cell_size);
-        int c = (int)(x / cell_size);
-        dev_cell_idx[i] = r * grid_size + c;
-        indices[i] = i;
+        grid_last[prev_cell] = idx;
+        grid_first[cur_cell] = idx;
     }
+    if (idx == N - 1)
+        grid_last[cur_cell] = N;
 }
 
 void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
@@ -64,6 +79,7 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     auto cell_idx_pointer = thrust::device_pointer_cast(dev_cell_idx);
     auto indices_pointer = thrust::device_pointer_cast(dev_indices);
 
+    thrust::sort_by_key(cell_idx_pointer, cell_idx_pointer + N, indices_pointer);
 
 }
 
