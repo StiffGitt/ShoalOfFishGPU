@@ -16,27 +16,7 @@
 #include "imgui/imgui_impl_opengl3.h"
 #include "Fish.h"
 #include "kernel.cuh"
-
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 900 
-#define ATTR_COUNT 5
-#define N 500
-#define SPECIES_COUNT 3
-#define LEFT_EDGE -0.7f
-#define RIGHT_EDGE 0.7f
-#define BOTTOM_EDGE -0.7f
-#define TOP_EDGE 0.7f
-#define MARGIN 0.01f
-#define TURN_COEF 0.00004
-#define MINV 0.002
-#define MAXV 0.01
-#define RANGE1 0.01f
-#define RANGE2 0.2f
-#define CURSOR_RANGE 0.1f
-#define CURSOR_COEF 0.1f
-#define GET_R(type) (type == 0)? 1.0f : 0.0f;
-#define GET_G(type) (type == 1)? 1.0f : 0.0f;
-#define GET_B(type) (type == 2)? 1.0f : 0.0f;
+#include "Consts.h"
 
 struct Velocity {
     float x[N];
@@ -90,217 +70,8 @@ void gather(int *indices)
     }
 }
 
-void calculate_v(float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
-    float preyCoef, float maxV, float minV, float curX, float curY, float curActive, bool predatorMode,
-    int *grid_first, int *grid_last, int *cell_idx, int *indices)
-{
-
-    float cell_size = r2 * 2;
-    int grid_size = (int)(2.0f / cell_size) + 1;
-    int grid_length = (grid_size) * (grid_size);
-    std::fill_n(grid_first, grid_length, -1);
-    std::fill_n(grid_last, grid_length, -1);
-
-    for (int i = 0; i < N; i++)
-        indices[i] = i;
-    assign_grid(cell_size, cell_idx, indices);
-
-    std::sort(indices, indices + N, sort_indices(cell_idx));
-    std::sort(cell_idx, cell_idx + N);
-
-    find_border_cells(grid_first, grid_last, cell_idx);
-
-    gather(indices);
-
-    Velocity vel;
-    float r1sq = r1 * r1;
-    float r2sq = r2 * r2;
-
-    for (int i = 0; i < N; i++)
-    {
-        float x = gathered_fishes[i].x;
-        float y = gathered_fishes[i].y;
-        float vx = gathered_fishes[i].dx;
-        float vy = gathered_fishes[i].dy;
-        float cumX = 0.0, cumY = 0.0, cumVx = 0.0, cumVy = 0.0, visibleFriendlyCount = 0.0, visiblePreyCount = 0.0,
-            closestPredatorX = -1.0, closestPredatorY = -1.0f, closeDx = 0.0, closeDy = 0.0, cumXP = 0.0, cumYP = 0.0,
-            closestPredatorDsq = 8.0f;
-        int cell = cell_idx[i];
-        int cells_to_check[] = { cell - 1, cell, cell + 1,
-            cell - grid_length - 1, cell - grid_length, cell - grid_length + 1,
-            cell - grid_length + 1, cell + grid_length, cell + grid_length + 1 };
-        for (int idx = 0; idx <= 8; idx++)
-        {
-            int nc = cells_to_check[idx];
-            if (nc < 0 || nc > grid_length || grid_first[nc] < 0)
-                continue;
-            for (int j = grid_first[nc]; j < grid_last[nc]; j++)
-            {
-                if (j == i)
-                    continue;
-                float xj = gathered_fishes[j].x;
-                float yj = gathered_fishes[j].y;
-                float dx = x - xj;
-                float dy = y - yj;
-
-                if (fabsf(dx) < r2 && fabsf(dy) < r2)
-                {
-                    float dsq = dx * dx + dy * dy;
-                    if (dsq < r2)
-                    {
-                        // Avoid predators
-                        if (gathered_fishes[i].species < gathered_fishes[j].species)
-                        {
-                            if (closestPredatorDsq > dsq)
-                            {
-                                closestPredatorDsq = dsq;
-                                closestPredatorX = xj;
-                                closestPredatorY = yj;
-                            }
-                        }
-                        // Hunt prey
-                        if (gathered_fishes[i].species > gathered_fishes[j].species)
-                        {
-                            visiblePreyCount++;
-                            cumXP += xj;
-                            cumYP += yj;
-                        }
-                        if (dsq < r1sq)
-                        {
-                            // Separation
-                            closeDx += (x - xj); /** (1 - (dx / r1));*/
-                            closeDy += (y - yj); /** (1 - (dy / r1));*/
-                        }
-                        else
-                        {
-                            if (gathered_fishes[i].species == gathered_fishes[j].species && gathered_fishes[i].species <= 1)
-                            {
-                                visibleFriendlyCount++;
-                                // Alignment
-                                cumVx += gathered_fishes[j].dx;
-                                cumVy += gathered_fishes[j].dy;
-
-                                // Cohension
-                                cumX += xj;
-                                cumY += yj;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Avoid predators
-        if (predatorMode && closestPredatorDsq < r2)
-        {
-            vx += (x - closestPredatorX) * predatorsCoef;
-            vy += (y - closestPredatorY) * predatorsCoef;
-        }
-
-        // Chase prey
-        if (predatorMode && visiblePreyCount > 0)
-        {
-            vx += ((cumXP / visiblePreyCount) - x) * preyCoef;
-            vy += ((cumYP / visiblePreyCount) - y) * preyCoef;
-        }
-
-        // Separation
-        vx += closeDx * avoidCoef;
-        vy += closeDy * avoidCoef;
-
-        if (visibleFriendlyCount > 0)
-        {
-            // Alignment
-            vx += ((cumVx / visibleFriendlyCount) - gathered_fishes[i].dx) * alignCoef;
-            vy += ((cumVy / visibleFriendlyCount) - gathered_fishes[i].dy) * alignCoef;
-
-            // Cohension
-            vx += ((cumX / visibleFriendlyCount) - x) * cohensionCoef;
-            vy += ((cumY / visibleFriendlyCount) - y) * cohensionCoef;
-        }
-
-
-
-        // Turn from edges
-        bool isTurning = false;
-        if (x < LEFT_EDGE && vx < minV)
-        {
-            isTurning = true;
-            if (x < -1.0 + MARGIN)
-                vx = -vx;
-            else
-                vx += turnCoef + (vx * vx) / (x + 1.0f);
-        }
-        if (x > RIGHT_EDGE && vx > -minV)
-        {
-            isTurning = true;
-            if (x > 1.0 - MARGIN)
-                vx = -vx;
-            else
-                vx -= turnCoef + (vx * vx) / (1.0f - x);
-        }
-
-        if (y < BOTTOM_EDGE && vy < minV)
-        {
-            isTurning = true;
-            if (y < -1.0 + MARGIN)
-                vy = -vy;
-            else
-                vy += turnCoef + (vy * vy) / (y + 1.0f);
-        }
-        if (y > TOP_EDGE && vy > -minV)
-        {
-            isTurning = true;
-            if (y > 1.0 - MARGIN)
-                vy = -vy;
-            else
-               vy -= turnCoef + (vy * vy) / (1.0f - y);
-        }
-
-        float dcx = x - curX;
-        float dcy = y - curY;
-        if (curActive &&  dcx * dcx + dcy * dcy < CURSOR_RANGE * CURSOR_RANGE)
-        {
-            vx += dcx * CURSOR_COEF;
-            vy += dcy * CURSOR_COEF;
-        }
-
-        // Adjust velocity to min:max
-        float v = sqrtf(vx * vx + vy * vy);
-        if (v < minV && !isTurning)
-        {
-            vx = (vx / v) * minV;
-            vy = (vy / v) * minV;
-        }
-        else if (v > maxV)
-        {
-            vx = (vx / v) * maxV;
-            vy = (vy / v) * maxV;
-        }
-
-        vel.x[i] = vx;
-        vel.y[i] = vy;
-    }
-
-    for (int i = 0; i < N; i++)
-    {
-        fishes[indices[i]].dx = vel.x[i];
-        fishes[indices[i]].dy = vel.y[i];
-    }
-
-    
-}
-
 int main(void)
 {
-    double A[3], B[3], C[3];
-
-    // Populate arrays A and B.
-    A[0] = 5; A[1] = 8; A[2] = 3;
-    B[0] = 7; B[1] = 6; B[2] = 4;
-
-
-
     float r1 = RANGE1, cohensionCoef = 0.25, avoidCoef = 0.5, alignCoef = 0.5, predatorsCoef = 0.5f, preyCoef = 0.3f;
     float turnCoef = TURN_COEF;
     if (window_init())
@@ -312,7 +83,7 @@ int main(void)
     fishes_init();
     float cell_size = RANGE2 * 2;
     int grid_length = ((int)(2.0f / cell_size) + 1) * ((int)(2.0f / cell_size) + 1);
-    init_cuda(N, grid_length);
+    init_cuda(grid_length);
     buffer_init();
 
     GLuint shader = StartShaders("res/shaders/Basic.shader");
@@ -359,10 +130,14 @@ int main(void)
         //Sleep(20);
         if (!shouldPause)
         {
-            calculate_v(r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
-                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed, 
+            make_calculations_cuda(fishes, r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
+                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed,
                 predatorMode);
-            move_fishes();
+            /*calculate_v(r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
+                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed, 
+                predatorMode);*/
+
+            //move_fishes();
         }
     }
 
