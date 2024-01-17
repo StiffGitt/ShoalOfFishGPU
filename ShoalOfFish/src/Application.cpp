@@ -14,6 +14,8 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
+#include "Fish.h"
+#include "kernel.cuh"
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 900 
@@ -35,14 +37,6 @@
 #define GET_R(type) (type == 0)? 1.0f : 0.0f;
 #define GET_G(type) (type == 1)? 1.0f : 0.0f;
 #define GET_B(type) (type == 2)? 1.0f : 0.0f;
-
-struct Fish {
-    float x;
-    float dx;
-    float y;
-    float dy;
-    int species;
-};
 
 struct Velocity {
     float x[N];
@@ -327,6 +321,14 @@ void calculate_v(float r1, float r2, float turnCoef, float cohensionCoef, float 
 
 int main(void)
 {
+    double A[3], B[3], C[3];
+
+    // Populate arrays A and B.
+    A[0] = 5; A[1] = 8; A[2] = 3;
+    B[0] = 7; B[1] = 6; B[2] = 4;
+
+
+
     float r1 = RANGE1, cohensionCoef = 0.25, avoidCoef = 0.5, alignCoef = 0.5, predatorsCoef = 0.5f, preyCoef = 0.3f;
     float turnCoef = TURN_COEF;
     if (window_init())
@@ -338,10 +340,7 @@ int main(void)
     fishes_init();
     float cell_size = RANGE2 * 2;
     int grid_length = ((int)(2.0f / cell_size) + 1) * ((int)(2.0f / cell_size) + 1);
-    int* grid_first = (int*)malloc(grid_length * sizeof(int));
-    int* grid_last = (int*)malloc(grid_length * sizeof(int));
-    int* cell_idx = (int*)malloc(N * sizeof(int));
-    int* indices = (int*)malloc(N * sizeof(int));
+    init_cuda(N, grid_length);
     buffer_init();
 
     GLuint shader = StartShaders("res/shaders/Basic.shader");
@@ -390,17 +389,14 @@ int main(void)
         {
             calculate_v(r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
                 preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed, 
-                predatorMode, grid_first, grid_last, cell_idx, indices);
+                predatorMode);
             move_fishes();
         }
     }
 
     glDeleteProgram(shader);
 
-    free(grid_first);
-    free(grid_last);
-    free(cell_idx);
-    free(indices);
+    free_cuda();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
