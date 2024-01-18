@@ -1,4 +1,5 @@
 #include "cuda_runtime.h"
+#include "device_launch_parameters.h"
 #include <cstdio>
 #include "kernel.cuh"
 #include <thrust/sort.h>
@@ -53,9 +54,10 @@ __global__ void find_border_cells(int* grid_first, int* grid_last, int* cell_idx
         grid_last[cur_cell] = N;
 }
 
-__global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
-    float preyCoef, float maxV, float minV, float curX, float curY, float curActive, bool predatorMode, int grid_size,
-    Fish* gathered_fishes,int* grid_first, int* grid_last, int* cell_idx, float *v_x, float *v_y)
+/*float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
+    float preyCoef, float maxV, float minV, float curX, float curY, float curActive, bool predatorMode,*/
+
+__global__ void calculate_v(Fish* gathered_fishes, int* grid_first, int* grid_last, int* cell_idx, float* v_x, float* v_y, float r1, float r2, int grid_size, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef, float preyCoef, bool predatorMode)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     if (idx >= N)
@@ -75,67 +77,68 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
     int cells_to_check[] = { cell - 1, cell, cell + 1,
         cell - grid_size - 1, cell - grid_size, cell - grid_size + 1,
         cell - grid_size + 1, cell + grid_size, cell + grid_size + 1 };
-    for (int idx = 0; idx <= 8; idx++)
-    {
-        int nc = cells_to_check[idx];
-        if (nc < 0 || nc > grid_length || grid_first[nc] < 0)
-            continue;
-        for (int j = grid_first[nc]; j < grid_last[nc]; j++)
-        {
-            if (j == idx)
-                continue;
-            float xj = gathered_fishes[j].x;
-            float yj = gathered_fishes[j].y;
-            float dx = x - xj;
-            float dy = y - yj;
+    
+    //for(int cidx = 0; cidx < 9; cidx++)
+    //{
+    //    int nc = cells_to_check[cidx];
+    //    if (nc < 0 || nc > grid_length || grid_first[nc] < 0)
+    //        /*continue*/;
+    //    //for (int j = grid_first[nc]; j < grid_last[nc]; j++)
+    //    //{
+    //    //    if (j == idx)
+    //    //        continue;
+    //    //    float xj = gathered_fishes[j].x;
+    //    //    float yj = gathered_fishes[j].y;
+    //    //    float dx = x - xj;
+    //    //    float dy = y - yj;
 
-            if (fabsf(dx) < r2 && fabsf(dy) < r2)
-            {
-                float dsq = dx * dx + dy * dy;
-                if (dsq < r2)
-                {
-                    // Avoid predators
-                    if (gathered_fishes[idx].species < gathered_fishes[j].species)
-                    {
-                        if (closestPredatorDsq > dsq)
-                        {
-                            closestPredatorDsq = dsq;
-                            closestPredatorX = xj;
-                            closestPredatorY = yj;
-                        }
-                    }
-                    // Hunt prey
-                    if (gathered_fishes[idx].species > gathered_fishes[j].species)
-                    {
-                        visiblePreyCount++;
-                        cumXP += xj;
-                        cumYP += yj;
-                    }
-                    if (dsq < r1sq)
-                    {
-                        // Separation
-                        closeDx += (x - xj); /** (1 - (dx / r1));*/
-                        closeDy += (y - yj); /** (1 - (dy / r1));*/
-                    }
-                    else
-                    {
-                        if (gathered_fishes[idx].species == gathered_fishes[j].species && gathered_fishes[idx].species <= 1)
-                        {
-                            visibleFriendlyCount++;
-                            // Alignment
-                            cumVx += gathered_fishes[j].dx;
-                            cumVy += gathered_fishes[j].dy;
+    //    //    if (fabsf(dx) < r2 && fabsf(dy) < r2)
+    //    //    {
+    //    //        float dsq = dx * dx + dy * dy;
+    //    //        if (dsq < r2)
+    //    //        {
+    //    //            // Avoid predators
+    //    //            if (gathered_fishes[idx].species < gathered_fishes[j].species)
+    //    //            {
+    //    //                if (closestPredatorDsq > dsq)
+    //    //                {
+    //    //                    closestPredatorDsq = dsq;
+    //    //                    closestPredatorX = xj;
+    //    //                    closestPredatorY = yj;
+    //    //                }
+    //    //            }
+    //    //            // Hunt prey
+    //    //            if (gathered_fishes[idx].species > gathered_fishes[j].species)
+    //    //            {
+    //    //                visiblePreyCount++;
+    //    //                cumXP += xj;
+    //    //                cumYP += yj;
+    //    //            }
+    //    //            if (dsq < r1sq)
+    //    //            {
+    //    //                // Separation
+    //    //                closeDx += (x - xj); /** (1 - (dx / r1));*/
+    //    //                closeDy += (y - yj); /** (1 - (dy / r1));*/
+    //    //            }
+    //    //            else
+    //    //            {
+    //    //                if (gathered_fishes[idx].species == gathered_fishes[j].species && gathered_fishes[idx].species <= 1)
+    //    //                {
+    //    //                    visibleFriendlyCount++;
+    //    //                    // Alignment
+    //    //                    cumVx += gathered_fishes[j].dx;
+    //    //                    cumVy += gathered_fishes[j].dy;
 
-                            // Cohension
-                            cumX += xj;
-                            cumY += yj;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    //    //                    // Cohension
+    //    //                    cumX += xj;
+    //    //                    cumY += yj;
+    //    //                }
+    //    //            }
+    //    //        }
+    //    //    }
+    //    //}
+    //}
+    
     // Avoid predators
     if (predatorMode && closestPredatorDsq < r2)
     {
@@ -143,31 +146,38 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         vy += (y - closestPredatorY) * predatorsCoef;
     }
 
-    // Chase prey
-    if (predatorMode && visiblePreyCount > 0)
+    //// Chase prey
+    /*if (predatorMode && visiblePreyCount > 0)
     {
         vx += ((cumXP / visiblePreyCount) - x) * preyCoef;
         vy += ((cumYP / visiblePreyCount) - y) * preyCoef;
-    }
+    }*/
 
-    // Separation
-    vx += closeDx * avoidCoef;
-    vy += closeDy * avoidCoef;
+    gathered_fishes[idx].x = 40.0f;
+    //// Separation
+    /*vx += closeDx * avoidCoef;
+    vy += closeDy * avoidCoef;*/
 
-    if (visibleFriendlyCount > 0)
-    {
-        // Alignment
-        vx += ((cumVx / visibleFriendlyCount) - gathered_fishes[idx].dx) * alignCoef;
-        vy += ((cumVy / visibleFriendlyCount) - gathered_fishes[idx].dy) * alignCoef;
+    //if (visibleFriendlyCount > 0)
+    //{
+    //    // Alignment
+    //    vx += ((cumVx / visibleFriendlyCount) - gathered_fishes[idx].dx) * alignCoef;
+    //    vy += ((cumVy / visibleFriendlyCount) - gathered_fishes[idx].dy) * alignCoef;
 
-        // Cohension
-        vx += ((cumX / visibleFriendlyCount) - x) * cohensionCoef;
-        vy += ((cumY / visibleFriendlyCount) - y) * cohensionCoef;
-    }
+    //    // Cohension
+    //    vx += ((cumX / visibleFriendlyCount) - x) * cohensionCoef;
+    //    vy += ((cumY / visibleFriendlyCount) - y) * cohensionCoef;
+    //}
+}
 
-
-
-    // Turn from edges
+__global__ void scale_v(Fish* gathered_fishes, float* v_x, float* v_y, float maxV, float minV, float curX, float curY, float curActive)
+{
+    //// Turn from edges
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    float x = gathered_fishes[idx].x;
+    float y = gathered_fishes[idx].y;
+    float vx = v_x[idx];
+    float vy = v_y[idx];
     bool isTurning = false;
     if (x < LEFT_EDGE && vx < minV)
     {
@@ -175,7 +185,7 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         if (x < -1.0 + MARGIN)
             vx = -vx;
         else
-            vx += turnCoef + (vx * vx) / (x + 1.0f);
+            vx += TURN_COEF + (vx * vx) / (x + 1.0f);
     }
     if (x > RIGHT_EDGE && vx > -minV)
     {
@@ -183,7 +193,7 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         if (x > 1.0 - MARGIN)
             vx = -vx;
         else
-            vx -= turnCoef + (vx * vx) / (1.0f - x);
+            vx -= TURN_COEF + (vx * vx) / (1.0f - x);
     }
 
     if (y < BOTTOM_EDGE && vy < minV)
@@ -192,7 +202,7 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         if (y < -1.0 + MARGIN)
             vy = -vy;
         else
-            vy += turnCoef + (vy * vy) / (y + 1.0f);
+            vy += TURN_COEF + (vy * vy) / (y + 1.0f);
     }
     if (y > TOP_EDGE && vy > -minV)
     {
@@ -200,7 +210,7 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         if (y > 1.0 - MARGIN)
             vy = -vy;
         else
-            vy -= turnCoef + (vy * vy) / (1.0f - y);
+            vy -= TURN_COEF + (vy * vy) / (1.0f - y);
     }
 
     float dcx = x - curX;
@@ -211,7 +221,7 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
         vy += dcy * CURSOR_COEF;
     }
 
-    // Adjust velocity to min:max
+    //// Adjust velocity to minmax
     float v = sqrtf(vx * vx + vy * vy);
     if (v < minV && !isTurning)
     {
@@ -226,6 +236,12 @@ __global__ void calculate_v(float r1, float r2, float turnCoef, float cohensionC
 
     v_x[idx] = vx;
     v_y[idx] = vy;
+    gathered_fishes[idx].dx = vx;
+    gathered_fishes[idx].dx = 50.0f;
+    gathered_fishes[idx].dy = vy;
+
+    gathered_fishes[idx].x = 0;
+    gathered_fishes[idx].y = y + vy;
 }
 
 __global__ void move_fishes(Fish *gathered_fishes,float* v_x, float* v_y)
@@ -249,6 +265,7 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     float cell_size = r2 * 2;
     int grid_size = (int)(2.0f / cell_size) + 1;
     int grid_length = (grid_size) * (grid_size);
+    int* tab = (int*)malloc(grid_length * sizeof(int));
 
     cudaStatus = cudaMemcpy(dev_fishes, fishes, N * sizeof(Fish), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
@@ -269,8 +286,6 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceSynchronize failed!");
     }
-
-    
     
     auto cell_idx_pointer = thrust::device_pointer_cast(dev_cell_idx);
     auto indices_pointer = thrust::device_pointer_cast(dev_indices);
@@ -286,25 +301,37 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     auto gathered_fishes_pointer = thrust::device_pointer_cast(dev_gathered_fishes);
     thrust::gather(indices_pointer, indices_pointer + N, fishes_pointer, gathered_fishes_pointer);
 
-    calculate_v << < BLOCKS, THREADS >> > (r1, r2, turnCoef, cohensionCoef, avoidCoef, alignCoef, predatorsCoef, preyCoef, maxV, minV, curX, curY, curActive, predatorMode,
-        grid_size, dev_gathered_fishes, dev_grid_first, dev_grid_last, dev_cell_idx, dev_v_x, dev_v_y);
+    calculate_v << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_grid_first, dev_grid_last, dev_cell_idx, dev_v_x, dev_v_y, r1, r2, grid_size, cohensionCoef, avoidCoef, alignCoef, predatorsCoef, preyCoef, predatorMode);
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceSynchronize failed!");
     }
 
-    move_fishes << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y);
+    /*cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed!");
+    }
+    for (int i = 0; i < N; i++)
+        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
+
+    //move_fishes << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y);
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceSynchronize failed!");
     }
 
+    /*cudaStatus = cudaMemcpy(tab, dev_grid_last, grid_length * sizeof(int), cudaMemcpyDeviceToHost);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed!");
+    }
+    for (int i = 0; i < grid_length; i++)
+        std::cout << tab[i] << std::endl;*/
     cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
     }
     for (int i = 0; i < N; i++)
-        std::cout << fishes[i].x << std::endl;
+        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;
 
 }
 

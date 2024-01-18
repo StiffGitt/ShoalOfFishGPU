@@ -57,19 +57,6 @@ void print_vertices(float* vertices);
 void print_fish();
 
 
-
-void gather(int *indices)
-{
-    for (int i = 0; i < N; i++)
-    {
-        gathered_fishes[i].x = fishes[indices[i]].x;
-        gathered_fishes[i].y = fishes[indices[i]].y;
-        gathered_fishes[i].dx = fishes[indices[i]].dx;
-        gathered_fishes[i].dy = fishes[indices[i]].dy;
-        gathered_fishes[i].species = fishes[indices[i]].species;
-    }
-}
-
 int main(void)
 {
     float r1 = RANGE1, cohensionCoef = 0.25, avoidCoef = 0.5, alignCoef = 0.5, predatorsCoef = 0.5f, preyCoef = 0.3f;
@@ -257,6 +244,7 @@ void buffer_init()
 void draw_frame()
 {
     float* vertices = get_vertices();
+    //print_vertices(vertices);
     /* Render here */
     glClear(GL_COLOR_BUFFER_BIT);
 
