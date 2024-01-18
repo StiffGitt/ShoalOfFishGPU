@@ -167,9 +167,9 @@ Fish* fishes_init()
         fishes[i].y = (static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX)) * 2.0f - 1.0f;
         fishes[i].dx = (static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX) / 50.0f) * ( (std::rand() % 2)? -1.0f : 1.0f);
         fishes[i].dy = (static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX) / 50.0f) * ( (std::rand() % 2) ? -1.0f : 1.0f);
-        if (i % 50 == 0)
+        if (i % 200 == 0)
             fishes[i].species = 2;
-        else if (i % 10 == 0)
+        else if (i % 25 == 0)
             fishes[i].species = 1;
         else
             fishes[i].species = 0;
