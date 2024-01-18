@@ -78,66 +78,66 @@ __global__ void calculate_v(Fish* gathered_fishes, int* grid_first, int* grid_la
         cell - grid_size - 1, cell - grid_size, cell - grid_size + 1,
         cell - grid_size + 1, cell + grid_size, cell + grid_size + 1 };
     
-    //for(int cidx = 0; cidx < 9; cidx++)
-    //{
-    //    int nc = cells_to_check[cidx];
-    //    if (nc < 0 || nc > grid_length || grid_first[nc] < 0)
-    //        /*continue*/;
-    //    //for (int j = grid_first[nc]; j < grid_last[nc]; j++)
-    //    //{
-    //    //    if (j == idx)
-    //    //        continue;
-    //    //    float xj = gathered_fishes[j].x;
-    //    //    float yj = gathered_fishes[j].y;
-    //    //    float dx = x - xj;
-    //    //    float dy = y - yj;
+    for(int cidx = 0; cidx < 9; cidx++)
+    {
+        int nc = cells_to_check[cidx];
+        if (nc < 0 || nc > grid_length || grid_first[nc] < 0)
+            continue;
+        for (int j = grid_first[nc]; j < grid_last[nc]; j++)
+        {
+            if (j == idx)
+                continue;
+            float xj = gathered_fishes[j].x;
+            float yj = gathered_fishes[j].y;
+            float dx = x - xj;
+            float dy = y - yj;
 
-    //    //    if (fabsf(dx) < r2 && fabsf(dy) < r2)
-    //    //    {
-    //    //        float dsq = dx * dx + dy * dy;
-    //    //        if (dsq < r2)
-    //    //        {
-    //    //            // Avoid predators
-    //    //            if (gathered_fishes[idx].species < gathered_fishes[j].species)
-    //    //            {
-    //    //                if (closestPredatorDsq > dsq)
-    //    //                {
-    //    //                    closestPredatorDsq = dsq;
-    //    //                    closestPredatorX = xj;
-    //    //                    closestPredatorY = yj;
-    //    //                }
-    //    //            }
-    //    //            // Hunt prey
-    //    //            if (gathered_fishes[idx].species > gathered_fishes[j].species)
-    //    //            {
-    //    //                visiblePreyCount++;
-    //    //                cumXP += xj;
-    //    //                cumYP += yj;
-    //    //            }
-    //    //            if (dsq < r1sq)
-    //    //            {
-    //    //                // Separation
-    //    //                closeDx += (x - xj); /** (1 - (dx / r1));*/
-    //    //                closeDy += (y - yj); /** (1 - (dy / r1));*/
-    //    //            }
-    //    //            else
-    //    //            {
-    //    //                if (gathered_fishes[idx].species == gathered_fishes[j].species && gathered_fishes[idx].species <= 1)
-    //    //                {
-    //    //                    visibleFriendlyCount++;
-    //    //                    // Alignment
-    //    //                    cumVx += gathered_fishes[j].dx;
-    //    //                    cumVy += gathered_fishes[j].dy;
+            if (fabsf(dx) < r2 && fabsf(dy) < r2)
+            {
+                float dsq = dx * dx + dy * dy;
+                if (dsq < r2)
+                {
+                    // Avoid predators
+                    if (gathered_fishes[idx].species < gathered_fishes[j].species)
+                    {
+                        if (closestPredatorDsq > dsq)
+                        {
+                            closestPredatorDsq = dsq;
+                            closestPredatorX = xj;
+                            closestPredatorY = yj;
+                        }
+                    }
+                    // Hunt prey
+                    if (gathered_fishes[idx].species > gathered_fishes[j].species)
+                    {
+                        visiblePreyCount++;
+                        cumXP += xj;
+                        cumYP += yj;
+                    }
+                    if (dsq < r1sq)
+                    {
+                        // Separation
+                        closeDx += (x - xj); /** (1 - (dx / r1));*/
+                        closeDy += (y - yj); /** (1 - (dy / r1));*/
+                    }
+                    else
+                    {
+                        if (gathered_fishes[idx].species == gathered_fishes[j].species && gathered_fishes[idx].species <= 1)
+                        {
+                            visibleFriendlyCount++;
+                            // Alignment
+                            cumVx += gathered_fishes[j].dx;
+                            cumVy += gathered_fishes[j].dy;
 
-    //    //                    // Cohension
-    //    //                    cumX += xj;
-    //    //                    cumY += yj;
-    //    //                }
-    //    //            }
-    //    //        }
-    //    //    }
-    //    //}
-    //}
+                            // Cohension
+                            cumX += xj;
+                            cumY += yj;
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     // Avoid predators
     if (predatorMode && closestPredatorDsq < r2)
@@ -147,37 +147,42 @@ __global__ void calculate_v(Fish* gathered_fishes, int* grid_first, int* grid_la
     }
 
     //// Chase prey
-    /*if (predatorMode && visiblePreyCount > 0)
+    if (predatorMode && visiblePreyCount > 0)
     {
         vx += ((cumXP / visiblePreyCount) - x) * preyCoef;
         vy += ((cumYP / visiblePreyCount) - y) * preyCoef;
-    }*/
+    }
 
-    gathered_fishes[idx].x = 40.0f;
     //// Separation
-    /*vx += closeDx * avoidCoef;
-    vy += closeDy * avoidCoef;*/
+    vx += closeDx * avoidCoef;
+    vy += closeDy * avoidCoef;
 
-    //if (visibleFriendlyCount > 0)
-    //{
-    //    // Alignment
-    //    vx += ((cumVx / visibleFriendlyCount) - gathered_fishes[idx].dx) * alignCoef;
-    //    vy += ((cumVy / visibleFriendlyCount) - gathered_fishes[idx].dy) * alignCoef;
+    if (visibleFriendlyCount > 0)
+    {
+        // Alignment
+        vx += ((cumVx / visibleFriendlyCount) - gathered_fishes[idx].dx) * alignCoef;
+        vy += ((cumVy / visibleFriendlyCount) - gathered_fishes[idx].dy) * alignCoef;
 
-    //    // Cohension
-    //    vx += ((cumX / visibleFriendlyCount) - x) * cohensionCoef;
-    //    vy += ((cumY / visibleFriendlyCount) - y) * cohensionCoef;
-    //}
+        // Cohension
+        vx += ((cumX / visibleFriendlyCount) - x) * cohensionCoef;
+        vy += ((cumY / visibleFriendlyCount) - y) * cohensionCoef;
+    }
+
+    v_x[idx] = vx;
+    v_y[idx] = vy;
 }
 
-__global__ void scale_v(Fish* gathered_fishes, float* v_x, float* v_y, float maxV, float minV, float curX, float curY, float curActive)
+__global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, float maxV, float minV, float curX, float curY, float curActive)
 {
-    //// Turn from edges
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (idx >= N)
+        return;
     float x = gathered_fishes[idx].x;
     float y = gathered_fishes[idx].y;
     float vx = v_x[idx];
     float vy = v_y[idx];
+
+    // Turn from edges
     bool isTurning = false;
     if (x < LEFT_EDGE && vx < minV)
     {
@@ -234,14 +239,11 @@ __global__ void scale_v(Fish* gathered_fishes, float* v_x, float* v_y, float max
         vy = (vy / v) * maxV;
     }
 
-    v_x[idx] = vx;
-    v_y[idx] = vy;
     gathered_fishes[idx].dx = vx;
-    gathered_fishes[idx].dx = 50.0f;
     gathered_fishes[idx].dy = vy;
 
-    gathered_fishes[idx].x = 0;
-    gathered_fishes[idx].y = y + vy;
+    gathered_fishes[idx].x += vx;
+    gathered_fishes[idx].y += vy;
 }
 
 __global__ void move_fishes(Fish *gathered_fishes,float* v_x, float* v_y)
@@ -249,12 +251,6 @@ __global__ void move_fishes(Fish *gathered_fishes,float* v_x, float* v_y)
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     if (idx >= N)
         return;
-
-    gathered_fishes[idx].dx = v_x[idx];
-    gathered_fishes[idx].dy = v_y[idx];
-
-    gathered_fishes[idx].x += v_x[idx];
-    gathered_fishes[idx].y += v_y[idx];
 }
 
 void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
@@ -262,10 +258,11 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
 {
     cudaError_t cudaStatus;
     
+    float tab[N];
+
     float cell_size = r2 * 2;
     int grid_size = (int)(2.0f / cell_size) + 1;
     int grid_length = (grid_size) * (grid_size);
-    int* tab = (int*)malloc(grid_length * sizeof(int));
 
     cudaStatus = cudaMemcpy(dev_fishes, fishes, N * sizeof(Fish), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
@@ -306,32 +303,39 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceSynchronize failed!");
     }
-
-    /*cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
+    //cudaStatus = cudaMemcpy(tab, dev_v_x, N * sizeof(float), cudaMemcpyDeviceToHost);
+    /*if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
     }
     for (int i = 0; i < N; i++)
-        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
+        std::cout << tab[i] << std::endl;*/
 
-    //move_fishes << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y);
+    scale_and_move << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y, maxV, minV, curX, curY, curActive);
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize failed!");
+        fprintf(stderr, "scale_and_move_cudaDeviceSynchronize failed!");
     }
 
-    /*cudaStatus = cudaMemcpy(tab, dev_grid_last, grid_length * sizeof(int), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-    }
-    for (int i = 0; i < grid_length; i++)
-        std::cout << tab[i] << std::endl;*/
     cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
     }
-    for (int i = 0; i < N; i++)
-        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;
+    /*for (int i = 0; i < N; i++)
+        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
+
+    //move_fishes << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y);
+    /*cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaDeviceSynchronize failed!");
+    }*/
+
+    
+    cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed!");
+    }
+    /*for (int i = 0; i < N; i++)
+        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
 
 }
 
