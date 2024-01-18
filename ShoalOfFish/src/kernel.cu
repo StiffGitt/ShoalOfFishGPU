@@ -296,7 +296,7 @@ void make_calculations_cuda(float *vertices, float r1, float r2, float turnCoef,
 {
     cudaError_t cudaStatus;
     
-    float cell_size = r2 * 2;
+    float cell_size = r2;
     int grid_size = (int)(2.0f / cell_size) + 1;
     int grid_length = (grid_size) * (grid_size);
 

@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
     Fish *fishes = fishes_init();
 
     // Grid parameters
-    float cell_size = RANGE2 * 2;
+    float cell_size = RANGE2;
     int grid_length = ((int)(2.0f / cell_size) + 1) * ((int)(2.0f / cell_size) + 1);
 
     init_cuda(N, grid_length, fishes);
