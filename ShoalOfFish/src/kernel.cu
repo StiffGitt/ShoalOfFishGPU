@@ -18,6 +18,7 @@ int *dev_grid_last;
 int *dev_cell_idx;
 float *dev_v_x;
 float *dev_v_y;
+float *dev_vertices;
 
 __global__ void assign_grid(Fish *fishes, float cell_size, int* cell_idx, int* indices)
 {
@@ -54,9 +55,6 @@ __global__ void find_border_cells(int* grid_first, int* grid_last, int* cell_idx
         grid_last[cur_cell] = N;
 }
 
-/*float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
-    float preyCoef, float maxV, float minV, float curX, float curY, float curActive, bool predatorMode,*/
-
 __global__ void calculate_v(Fish* gathered_fishes, int* grid_first, int* grid_last, int* cell_idx, float* v_x, float* v_y, float r1, float r2, int grid_size, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef, float preyCoef, bool predatorMode)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -64,7 +62,6 @@ __global__ void calculate_v(Fish* gathered_fishes, int* grid_first, int* grid_la
         return;
     int grid_length = (grid_size) * (grid_size);
     float r1sq = r1 * r1;
-    float r2sq = r2 * r2;
 
     float x = gathered_fishes[idx].x;
     float y = gathered_fishes[idx].y;
@@ -187,7 +184,7 @@ __global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, fl
     if (x < LEFT_EDGE && vx < minV)
     {
         isTurning = true;
-        if (x < -1.0 + MARGIN)
+        if (x < -1.0 + MARGIN && vx < 0)
             vx = -vx;
         else
             vx += TURN_COEF + (vx * vx) / (x + 1.0f);
@@ -195,7 +192,7 @@ __global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, fl
     if (x > RIGHT_EDGE && vx > -minV)
     {
         isTurning = true;
-        if (x > 1.0 - MARGIN)
+        if (x > 1.0 - MARGIN && vx > 0)
             vx = -vx;
         else
             vx -= TURN_COEF + (vx * vx) / (1.0f - x);
@@ -204,7 +201,7 @@ __global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, fl
     if (y < BOTTOM_EDGE && vy < minV)
     {
         isTurning = true;
-        if (y < -1.0 + MARGIN)
+        if (y < -1.0 + MARGIN && vy < 0)
             vy = -vy;
         else
             vy += TURN_COEF + (vy * vy) / (y + 1.0f);
@@ -212,7 +209,7 @@ __global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, fl
     if (y > TOP_EDGE && vy > -minV)
     {
         isTurning = true;
-        if (y > 1.0 - MARGIN)
+        if (y > 1.0 - MARGIN && vy > 0)
             vy = -vy;
         else
             vy -= TURN_COEF + (vy * vy) / (1.0f - y);
@@ -246,28 +243,50 @@ __global__ void scale_and_move(Fish* gathered_fishes, float* v_x, float* v_y, fl
     gathered_fishes[idx].y += vy;
 }
 
-__global__ void move_fishes(Fish *gathered_fishes,float* v_x, float* v_y)
+__global__ void get_vertices(Fish *fishes, float *vertices)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     if (idx >= N)
         return;
+
+    float A[3] = { 0.005f, 0.007f, 0.01f };
+    float H[3] = { 0.02f, 0.03f, 0.04f };
+
+    float x = fishes[idx].x;
+    float y = fishes[idx].y;
+    float dx = fishes[idx].dx;
+    float dy = fishes[idx].dy;
+    int species = fishes[idx].species;
+    float d = sqrtf(dx * dx + dy * dy);
+
+    vertices[idx * 3 * ATTR_COUNT] = x - A[species] * (dy / d);
+    vertices[idx * 3 * ATTR_COUNT + 1] = y + A[species] * (dx / d);
+    vertices[idx * 3 * ATTR_COUNT + 2] = GET_R(species);
+    vertices[idx * 3 * ATTR_COUNT + 3] = GET_G(species);
+    vertices[idx * 3 * ATTR_COUNT + 4] = GET_B(species);
+    
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT] = x + A[species] * (dy / d);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT + 1] = y - A[species] * (dx / d);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT + 2] = GET_R(species);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT + 3] = GET_G(species);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT + 4] = GET_B(species);
+    
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT * 2] = x + H[species] * (dx / d);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT * 2 + 1] = y + H[species] * (dy / d);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT * 2 + 2] = GET_R(species);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT * 2 + 3] = GET_G(species);
+    vertices[idx * 3 * ATTR_COUNT + ATTR_COUNT * 2 + 4] = GET_B(species);
 }
 
-void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
+void make_calculations_cuda(float *vertices, float r1, float r2, float turnCoef, float cohensionCoef, float avoidCoef, float alignCoef, float predatorsCoef,
     float preyCoef, float maxV, float minV, float curX, float curY, float curActive, bool predatorMode)
 {
     cudaError_t cudaStatus;
     
-    float tab[N];
-
     float cell_size = r2 * 2;
     int grid_size = (int)(2.0f / cell_size) + 1;
     int grid_length = (grid_size) * (grid_size);
 
-    cudaStatus = cudaMemcpy(dev_fishes, fishes, N * sizeof(Fish), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-    }
     cudaStatus = cudaMemset(dev_grid_first, -1, grid_length * sizeof(int));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemset failed!");
@@ -303,12 +322,6 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceSynchronize failed!");
     }
-    //cudaStatus = cudaMemcpy(tab, dev_v_x, N * sizeof(float), cudaMemcpyDeviceToHost);
-    /*if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-    }
-    for (int i = 0; i < N; i++)
-        std::cout << tab[i] << std::endl;*/
 
     scale_and_move << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y, maxV, minV, curX, curY, curActive);
     cudaStatus = cudaDeviceSynchronize();
@@ -316,30 +329,24 @@ void make_calculations_cuda(Fish *fishes, float r1, float r2, float turnCoef, fl
         fprintf(stderr, "scale_and_move_cudaDeviceSynchronize failed!");
     }
 
-    cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
+    get_vertices << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_vertices);
+    cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
+        fprintf(stderr, "scale_and_move_cudaDeviceSynchronize failed!");
     }
-    /*for (int i = 0; i < N; i++)
-        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
 
-    //move_fishes << < BLOCKS, THREADS >> > (dev_gathered_fishes, dev_v_x, dev_v_y);
-    /*cudaStatus = cudaDeviceSynchronize();
+    cudaStatus = cudaMemcpy(vertices, dev_vertices, (N * 3 * ATTR_COUNT) * sizeof(float), cudaMemcpyDeviceToHost);
     if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize failed!");
-    }*/
-
-    
-    cudaStatus = cudaMemcpy(fishes, dev_gathered_fishes, N * sizeof(Fish), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
+        fprintf(stderr, "vertices cudaMemcpy failed!");
     }
-    /*for (int i = 0; i < N; i++)
-        std::cout << fishes[i].x << ", " << fishes[i].y << ": " << fishes[i].dx << ", " << fishes[i].dy << std::endl;*/
 
+    // Swap fishes arrays
+    Fish* temp = dev_fishes;
+    dev_fishes = dev_gathered_fishes;
+    dev_gathered_fishes = temp;
 }
 
-void init_cuda(int grid_length)
+void init_cuda(int grid_length, Fish *fishes)
 {
     cudaError_t cudaStatus;
 
@@ -379,6 +386,15 @@ void init_cuda(int grid_length)
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
     }
+    cudaStatus = cudaMalloc((void**)&dev_vertices, (N * 3 * ATTR_COUNT) * sizeof(float));
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed!");
+    }
+
+    cudaStatus = cudaMemcpy(dev_fishes, fishes, N * sizeof(Fish), cudaMemcpyHostToDevice);
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed!");
+    }
 }
 
 void free_cuda()
@@ -391,4 +407,5 @@ void free_cuda()
     cudaFree(dev_cell_idx);
     cudaFree(dev_v_x);
     cudaFree(dev_v_y);
+    cudaFree(dev_vertices);
 }

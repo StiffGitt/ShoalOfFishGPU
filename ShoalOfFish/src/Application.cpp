@@ -47,8 +47,7 @@ int window_init();
 void fishes_init();
 float* get_vertices();
 void buffer_init();
-void draw_frame();
-void move_fishes();
+void draw_frame(float* vertices);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
@@ -70,7 +69,7 @@ int main(void)
     fishes_init();
     float cell_size = RANGE2 * 2;
     int grid_length = ((int)(2.0f / cell_size) + 1) * ((int)(2.0f / cell_size) + 1);
-    init_cuda(grid_length);
+    init_cuda(grid_length, fishes);
     buffer_init();
 
     GLuint shader = StartShaders("res/shaders/Basic.shader");
@@ -88,7 +87,15 @@ int main(void)
     {
         glfwPollEvents();
 
-        draw_frame();
+        if (!shouldPause)
+        {
+            float* vertices = (float*)malloc(N * 3 * ATTR_COUNT * sizeof(float));
+            make_calculations_cuda(vertices, r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
+                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed,
+                predatorMode);
+            draw_frame(vertices);
+        }
+
 
         // Imgui
         ImGui_ImplOpenGL3_NewFrame();
@@ -113,19 +120,6 @@ int main(void)
 
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
-
-        //Sleep(20);
-        if (!shouldPause)
-        {
-            make_calculations_cuda(fishes, r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
-                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed,
-                predatorMode);
-            /*calculate_v(r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
-                preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed, 
-                predatorMode);*/
-
-            //move_fishes();
-        }
     }
 
     glDeleteProgram(shader);
@@ -241,9 +235,9 @@ void buffer_init()
     glBindVertexArray(0);
 }
 
-void draw_frame()
+void draw_frame(float *vertices)
 {
-    float* vertices = get_vertices();
+    //float* vertices = get_vertices();
     //print_vertices(vertices);
     /* Render here */
     glClear(GL_COLOR_BUFFER_BIT);
@@ -257,15 +251,6 @@ void draw_frame()
     glDrawArrays(GL_TRIANGLES, 0, 3 * N);
 
     glBindVertexArray(0);
-}
-
-void move_fishes()
-{
-    for (int i = 0; i < N; i++)
-    {
-        fishes[i].x += fishes[i].dx;
-        fishes[i].y += fishes[i].dy;
-    }
 }
 
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
