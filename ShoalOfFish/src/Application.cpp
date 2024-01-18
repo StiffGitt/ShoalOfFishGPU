@@ -18,62 +18,56 @@
 #include "kernel.cuh"
 #include "Consts.h"
 
-struct Velocity {
-    float x[N];
-    float y[N];
-};
-
-class sort_indices
-{
-private:
-    int* mparr;
-public:
-    sort_indices(int* parr) : mparr(parr) {}
-    bool operator()(int i, int j) const { return mparr[i] < mparr[j]; }
-};
 
 GLFWwindow* window;
 GLuint buffer, vao;
-Fish fishes[N];
-Fish gathered_fishes[N];
 
 float A[3] = { 0.005f, 0.007f, 0.01f };
 float H[3] = { 0.02f, 0.03f, 0.04f };
 double cursorX = 0;
 double cursorY = 0;
 bool mouse_pressed = false;
+int N;
 
 int window_init();
-void fishes_init();
-float* get_vertices();
-void buffer_init();
+Fish* fishes_init();
+float* get_vertices(Fish* fishes);
+void buffer_init(Fish* fishes);
 void draw_frame(float* vertices);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
-
-void print_vertices(float* vertices);
-void print_fish();
-
-
-int main(void)
+int main(int argc, char *argv[])
 {
-    float r1 = RANGE1, cohensionCoef = 0.25, avoidCoef = 0.5, alignCoef = 0.5, predatorsCoef = 0.5f, preyCoef = 0.3f;
-    float turnCoef = TURN_COEF;
+    // Initialize fishes count
+    if (argc > 1)
+        N = std::stoi(argv[1]);
+    else
+        N = 1000;
+
+    // Initialize model coefficients
+    float r1 = RANGE1, cohensionCoef = 0.25, avoidCoef = 0.5, alignCoef = 0.5, predatorsCoef = 0.5f, preyCoef = 0.3f, turnCoef = TURN_COEF;
+    float* vertices = (float*)malloc(N * 3 * ATTR_COUNT * sizeof(float));
+
     if (window_init())
         return -1;
 
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
 
-    fishes_init();
+    Fish *fishes = fishes_init();
+
+    // Grid parameters
     float cell_size = RANGE2 * 2;
     int grid_length = ((int)(2.0f / cell_size) + 1) * ((int)(2.0f / cell_size) + 1);
-    init_cuda(grid_length, fishes);
-    buffer_init();
+
+    init_cuda(N, grid_length, fishes);
+
+    buffer_init(fishes);
 
     GLuint shader = StartShaders("res/shaders/Basic.shader");
      
+    // Initialize Imgui
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -89,7 +83,6 @@ int main(void)
 
         if (!shouldPause)
         {
-            float* vertices = (float*)malloc(N * 3 * ATTR_COUNT * sizeof(float));
             make_calculations_cuda(vertices, r1, RANGE2, turnCoef, cohensionCoef / 1000.0f, avoidCoef / 100.0f, alignCoef / 100.0f, predatorsCoef / 50.0f,
                 preyCoef / 100.0f, MAXV, MINV, ((cursorX / WINDOW_WIDTH) * 2) - 1, ((cursorY / WINDOW_HEIGHT) * 2) - 1, mouse_pressed,
                 predatorMode);
@@ -118,12 +111,12 @@ int main(void)
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        /* Swap front and back buffers */
+        // Swap front and back buffers 
         glfwSwapBuffers(window);
     }
 
+    // Free resources
     glDeleteProgram(shader);
-
     free_cuda();
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -163,8 +156,10 @@ int window_init()
     return 0;
 }
 
-void fishes_init()
+// Initialize random fishes position and velocity
+Fish* fishes_init()
 {
+    Fish* fishes = (Fish*)malloc(N * sizeof(Fish));
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
     for (int i = 0; i < N; i++)
     {
@@ -179,9 +174,11 @@ void fishes_init()
         else
             fishes[i].species = 0;
     }
+    return fishes;
 }
 
-float* get_vertices()
+// Calculate triangle vertices position for each fish
+float* get_vertices(Fish *fishes)
 {
     float* vertices = (float*)malloc(N * 3 * ATTR_COUNT * sizeof(float));
     for (int i = 0; i < N; i++)
@@ -214,9 +211,10 @@ float* get_vertices()
     return vertices;
 }
 
-void buffer_init()
+// Initialize vertices buffer and vertex array
+void buffer_init(Fish* fishes)
 {
-    float* vertices = get_vertices();
+    float* vertices = get_vertices(fishes);
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -237,9 +235,6 @@ void buffer_init()
 
 void draw_frame(float *vertices)
 {
-    //float* vertices = get_vertices();
-    //print_vertices(vertices);
-    /* Render here */
     glClear(GL_COLOR_BUFFER_BIT);
 
     glBindVertexArray(vao);
@@ -275,45 +270,5 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
         mouse_pressed = false;
-    }
-}
-
-void print_vertices(float* vertices)
-{
-    for (int i = 0; i < 3 * N; i++)
-    {
-        //if (vertices[i * ATTR_COUNT] > 1.0f)
-        //    vertices[i * ATTR_COUNT] = 1.0f;
-        //if (vertices[i * ATTR_COUNT] < 0.0f)
-        //    vertices[i * ATTR_COUNT] = 0.0f;
-        //if (vertices[i * ATTR_COUNT + 1] > 1.0f)
-        //    vertices[i * ATTR_COUNT + 1] = 1.0f;
-        //if (vertices[i * ATTR_COUNT + 1] < 0.0f)
-        //    vertices[i * ATTR_COUNT + 1] = 0.0f;
-        std::cout << "x1 = " << vertices[i  * ATTR_COUNT] << std::endl;
-        std::cout << "y1 = " << vertices[i  * ATTR_COUNT + 1] << std::endl;
-        std::cout << "r = " << vertices[i * ATTR_COUNT + 2] << std::endl;
-        std::cout << "g = " << vertices[i * ATTR_COUNT + 3] << std::endl;
-        std::cout << "b = " << vertices[i * ATTR_COUNT + 4] << std::endl;
-
-        std::cout << "---------------------" << std::endl;
-    }
-
-    /*for (int i = 0; i < 3 * N; i++)
-    {
-        std::cout << vertices[i * ATTR_COUNT] << " , ";
-        std::cout << vertices[i * ATTR_COUNT + 1] << " , ";
-        std::cout << vertices[i * ATTR_COUNT + 2] << " , ";
-        std::cout << vertices[i * ATTR_COUNT + 3] << " , ";
-        std::cout << vertices[i * ATTR_COUNT + 4] << " , " << std::endl;
-    }*/
-}
-
-void print_fish()
-{
-    for (int i = 0; i < N; i++)
-    {
-        std::cout << "vx = " << fishes[i].dx << std::endl;
-        std::cout << "vy = " << fishes[i].dy << std::endl;
     }
 }

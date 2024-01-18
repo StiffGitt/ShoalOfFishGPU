@@ -1,7 +1,6 @@
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 900 
 #define ATTR_COUNT 5
-#define N 200
 #define SPECIES_COUNT 3
 #define LEFT_EDGE -0.8f
 #define RIGHT_EDGE 0.8f
